@@ -1,0 +1,25 @@
+{
+  "name": "exchange-volume",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc -w"
+  },
+  "keywords": [],
+  "author": "SmoothBot",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.9.3"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@types/axios": "^0.14.4",
+    "axios": "^1.7.7",
+    "axois": "^0.0.1-security",
+    "date-fns": "^4.1.0",
+    "nodeplotlib": "^1.1.2"
+  }
+}
