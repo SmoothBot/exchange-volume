@@ -176,4 +176,7 @@ async function main(): Promise<void> {
 }
 
 // Execute the function
-main();
+// main();
+
+
+getExchangeVolume('binance').then(v => console.log(JSON.stringify(v, null, 2)));

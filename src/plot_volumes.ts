@@ -1,12 +1,51 @@
 import { plot, Plot, Layout } from 'nodeplotlib';
 import { PrismaClient } from '@prisma/client';
 import { format } from 'date-fns';
+import axios from 'axios';
 
 const prisma = new PrismaClient();
 
+type BTCPrice = {
+    [date: string]: number;
+};
+
+async function getBTCPrices(): Promise<BTCPrice> {
+    try {
+        const response = await axios.get(
+            'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart',
+            {
+                params: {
+                    vs_currency: 'usd',
+                    days: 365,
+                    interval: 'daily'
+                },
+                headers: {
+                    'x-cg-pro-api-key': 'CG-padZVjDaFFxvt1x6vSZ1RrTt'
+                }
+            }
+        );
+
+        const prices: BTCPrice = {};
+        response.data.prices.forEach(([timestamp, price]: [number, number]) => {
+            const dateStr = format(new Date(timestamp), 'yyyy-MM-dd');
+            prices[dateStr] = price;
+        });
+
+        return prices;
+    } catch (error) {
+        console.error('Error fetching BTC prices:', error);
+        throw error;
+    }
+}
+
 async function plotVolumes() {
     try {
+        // Fetch BTC prices first
+        console.log('Fetching BTC prices...');
+        const btcPrices = await getBTCPrices();
+
         // Fetch all volume data with exchange info
+        console.log('Fetching volume data...');
         const volumeData = await prisma.volume.findMany({
             include: {
                 exchange: true
@@ -32,10 +71,14 @@ async function plotVolumes() {
             }
             
             const data = dailyVolumes.get(dateStr)!;
+            // Convert BTC volume to USD
+            const btcPrice = btcPrices[dateStr] || 0;
+            const volumeUSD = record.volume * btcPrice;
+            
             if (record.exchange.centralized) {
-                data.centralized += record.volume / 1e9; // Convert to billions
+                data.centralized += volumeUSD / 1e9; // Convert to billions
             } else {
-                data.decentralized += record.volume / 1e9;
+                data.decentralized += volumeUSD / 1e9;
             }
         });
 
@@ -51,7 +94,7 @@ async function plotVolumes() {
                 y: centralizedVolumes,
                 type: 'scatter',
                 mode: 'lines',
-                name: 'Centralized Exchanges',
+                name: 'CEX',
                 line: { color: 'rgb(31, 119, 180)' }
             },
             {
@@ -59,24 +102,13 @@ async function plotVolumes() {
                 y: decentralizedVolumes,
                 type: 'scatter',
                 mode: 'lines',
-                name: 'Decentralized Exchanges',
+                name: 'DEX',
                 line: { color: 'rgb(255, 127, 14)' }
             },
-            // {
-            //     x: dates,
-            //     y: dates.map((_, i) => centralizedVolumes[i] + decentralizedVolumes[i]),
-            //     type: 'scatter',
-            //     mode: 'lines',
-            //     name: 'Total Volume',
-            //     line: { 
-            //         color: 'rgb(44, 160, 44)',
-            //         dash: 'dot'
-            //     }
-            // }
         ];
 
         const layout: Layout = {
-            title: 'Daily Trading Volume: Centralized vs Decentralized Exchanges',
+            title: 'Total Daily Trading Volume: Centralized vs Decentralized Exchanges',
             xaxis: {
                 title: 'Date',
                 tickangle: 45
@@ -103,10 +135,10 @@ async function plotVolumes() {
         const calculateStats = (volumes: number[]) => {
             const sum = volumes.reduce((a, b) => a + b, 0);
             return {
-                average: sum / volumes.length,
-                total: sum,
-                max: Math.max(...volumes),
-                min: Math.min(...volumes)
+                average: (sum / volumes.length).toFixed(2),
+                total: sum.toFixed(2),
+                max: Math.max(...volumes).toFixed(2),
+                min: Math.min(...volumes).toFixed(2)
             };
         };
 
@@ -124,8 +156,8 @@ async function plotVolumes() {
         console.log(totalStats);
 
         // Calculate and print market share
-        const cexShare = (cexStats.total / (cexStats.total + dexStats.total) * 100).toFixed(2);
-        const dexShare = (dexStats.total / (cexStats.total + dexStats.total) * 100).toFixed(2);
+        const cexShare = (Number(cexStats.total) / (Number(cexStats.total) + Number(dexStats.total)) * 100).toFixed(2);
+        const dexShare = (Number(dexStats.total) / (Number(cexStats.total) + Number(dexStats.total)) * 100).toFixed(2);
         
         console.log('\nMarket Share:');
         console.log(`Centralized Exchanges: ${cexShare}%`);
